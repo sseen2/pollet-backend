@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
@@ -63,6 +64,7 @@ class SurveyServiceTest {
 	private Member member2;
 	private Member member3;
 	private Survey survey;
+    private Survey survey2;
 	private Question question;
 	private QuestionOption questionOption;
 
@@ -121,14 +123,14 @@ class SurveyServiceTest {
 			.title("테스트 설문조사")
 			.creatorName(member3.getMemberId())
 			.purpose("테스트")
-			.startDateTime(LocalDateTime.of(2025, 9, 10, 0, 0, 0))
-			.endDateTime(LocalDateTime.of(2025, 9, 20, 0, 0, 0))
+			.startDateTime(LocalDateTime.of(2025, 1, 1, 0, 0, 0))
+			.endDateTime(LocalDateTime.of(2040, 12, 31, 0, 0, 0))
 			.endCondition(EndCondition.END_BY_DATE)
-			.submissionExpireDate(LocalDate.of(2025, 10, 31))
+			.submissionExpireDate(LocalDate.of(2050, 10, 31))
 			.privacyType(PrivacyType.AGREEMENT_FOR_COLLECTION_AND_USE)
 			.privacyContents(0L)
 			.privacyPurposeValue("")
-			.privacyExpireDate(LocalDate.of(2025, 10, 31))
+			.privacyExpireDate(LocalDate.of(2050, 10, 31))
 			.estimatedTime(3L)
 			.requireSubmissionCount(1L)
 			.rewardType(RewardType.POINT)
@@ -136,6 +138,26 @@ class SurveyServiceTest {
 			// 지급 가능한 예치 포인트 (1명 가능)
 			.availablePoint(30L)
 			.build();
+
+        survey2 = Survey.builder()
+                .member(member3)
+                .title("테스트 설문조사")
+                .creatorName(member3.getMemberId())
+                .purpose("테스트")
+                .startDateTime(LocalDateTime.of(2025, 1, 1, 0, 0, 0))
+                .endDateTime(LocalDateTime.of(2040, 12, 31, 0, 0, 0))
+                .endCondition(EndCondition.END_BY_DATE)
+                .submissionExpireDate(LocalDate.of(2050, 10, 31))
+                .privacyType(PrivacyType.AGREEMENT_FOR_COLLECTION_AND_USE)
+                .privacyContents(0L)
+                .privacyPurposeValue("")
+                .privacyExpireDate(LocalDate.of(2050, 10, 31))
+                .estimatedTime(3L)
+                .requireSubmissionCount(1L)
+                .rewardType(RewardType.POINT)
+                .rewardPointPerMinute(10L)
+                .availablePoint(999999L)
+                .build();
 
 		question = Question.builder()
 			.order(1L)
@@ -158,6 +180,7 @@ class SurveyServiceTest {
 		survey.addQuestion(question);
 
 		surveyRepository.save(survey);
+        surveyRepository.save(survey2);
 	}
 
 	@Test
@@ -201,7 +224,11 @@ class SurveyServiceTest {
 			return true;
 		} catch (BusinessException e) {
 			e.printStackTrace();
-			assertThat(e.getErrorCode()).isEqualTo(SurveyErrorCode.SURVEY_NOT_ENOUGH_POINTS);
+
+            assertThat(e.getErrorCode()).isIn(
+                    SurveyErrorCode.SURVEY_NOT_ENOUGH_POINTS,
+                    SurveyErrorCode.TOO_MANY_REQUESTS
+            );
 			return false;
 		} catch (Exception e) {
 			throw new RuntimeException(e);
@@ -211,4 +238,66 @@ class SurveyServiceTest {
 	private boolean getResult(Future<Boolean> future) throws Exception {
 		return future.get(5, TimeUnit.SECONDS);
 	}
+
+    @Test
+    @Transactional(propagation = Propagation.NEVER)
+    void concurrencyControlTest_TooManyRequests() throws Exception {
+        Long surveyId = survey2.getId();
+
+        int threadCount = 10;
+        ExecutorService pool = Executors.newFixedThreadPool(threadCount);
+        CyclicBarrier startGate = new CyclicBarrier(threadCount);
+
+        List<Future<Boolean>> futures = new ArrayList<>();
+
+        for (int i = 1; i <= threadCount; i++) {
+            Member testMember = createTestMember("member_" + i);
+            SurveySubmissionRequest request = buildSurveySubmissionRequest();
+
+            futures.add(pool.submit(() -> submitAsync_TooManyRequest(startGate, surveyId, testMember, request)));
+        }
+
+        int successCount = 0;
+        int tooManyRequestCount = 0;
+
+        for (Future<Boolean> future : futures) {
+            Boolean result = future.get(10, TimeUnit.SECONDS);
+
+            if (result) {
+                successCount++;
+            } else {
+                tooManyRequestCount++;
+            }
+        }
+
+        pool.shutdown();
+
+        System.out.println("성공한 요청 수: " + successCount);
+        System.out.println("Too Many Requests 요청 수: " + tooManyRequestCount);
+
+        assertThat(tooManyRequestCount).isGreaterThan(0);
+    }
+
+    private Member createTestMember(String username) {
+        Member member = Member.builder()
+                .authProvider(AuthProvider.KAKAO)
+                .profileImageUrl("")
+                .role(Role.MEMBER)
+                .memberId(username)
+                .email(username + "@test.com")
+                .build();
+        return memberRepository.save(member);
+    }
+
+    private Boolean submitAsync_TooManyRequest(CyclicBarrier startGate, Long surveyId, Member member, SurveySubmissionRequest request) throws Exception {
+        try {
+            startGate.await(3, TimeUnit.SECONDS);
+            surveyService.submitSurvey(surveyId, member, request);
+            return true;
+        } catch (BusinessException e) {
+            return false;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
