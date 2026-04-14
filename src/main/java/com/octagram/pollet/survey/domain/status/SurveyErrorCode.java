@@ -26,7 +26,8 @@ public enum SurveyErrorCode implements BaseCode {
 	ALREADY_SUBMIT_SURVEY(HttpStatus.CONFLICT, "SE_013", "이미 참여한 설문입니다."),
 	REQUIRED_QUESTION_SUBMISSION(HttpStatus.BAD_REQUEST, "SE_014", "필수 질문에 대한 응답이 필요합니다."),
 	SURVEY_NOT_ENOUGH_POINTS(HttpStatus.CONFLICT, "SE_015", "설문의 예치 포인트가 부족하여 설문조사에 참여할 수 없습니다."),
-	SURVEY_SELF_SUBMISSION_NOT_ALLOWED(HttpStatus.FORBIDDEN, "SE_016", "본인의 설문에 응답할 수 없습니다.");
+	SURVEY_SELF_SUBMISSION_NOT_ALLOWED(HttpStatus.FORBIDDEN, "SE_016", "본인의 설문에 응답할 수 없습니다."),
+    TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "SE_017", "현재 접속자가 많아 처리가 지연되었습니다. 다시 시도해주세요.");
 
 	private final HttpStatus status;
 	private final String code;

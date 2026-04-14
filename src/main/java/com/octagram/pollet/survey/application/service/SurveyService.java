@@ -54,6 +54,10 @@ import com.octagram.pollet.survey.presentation.dto.response.standard.SurveyRespo
 import com.octagram.pollet.survey.presentation.dto.response.standard.TagResponse;
 
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -171,9 +175,14 @@ public class SurveyService {
 			.toList();
 	}
 
+    @Retryable(
+            retryFor = {ObjectOptimisticLockingFailureException.class},
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 100)
+    )
 	@Transactional
 	public void submitSurvey(Long surveyId, Member member, SurveySubmissionRequest request) {
-		Survey survey = surveyRepository.findByIdForUpdate(surveyId)
+		Survey survey = surveyRepository.findByIdByOptimistic(surveyId)
 			.orElseThrow(() -> new BusinessException(SurveyErrorCode.SURVEY_NOT_FOUND));
 
 		validateInProgressSurvey(survey);
@@ -182,7 +191,6 @@ public class SurveyService {
 		validateSurveyNotSubmitted(survey, member);
 		validateRequiredQuestionSubmission(request.questionSubmissions());
 
-		surveySubmissionRepository.existsBySurveyAndMember(survey, member);
 		SurveySubmission surveySubmission = saveSurveySubmission(request, survey, member);
 		List<QuestionSubmission> questionSubmissions = saveQuestionSubmissions(request.questionSubmissions(), surveySubmission);
 		saveQuestionOptionSubmissions(request.questionSubmissions(), questionSubmissions);
@@ -195,6 +203,16 @@ public class SurveyService {
 			updateSurveyPointHistory(survey, member, amount);
 		}
 	}
+
+    @Recover
+    public void recoverSubmitSurvey(ObjectOptimisticLockingFailureException e, Long surveyId, Member member, SurveySubmissionRequest request) {
+        throw new BusinessException(SurveyErrorCode.TOO_MANY_REQUESTS);
+    }
+
+    @Recover
+    public void recoverBusinessException(BusinessException e, Long surveyId, Member member, SurveySubmissionRequest request) {
+        throw e;
+    }
 
 	private void updateSurveyPointHistory(Survey survey, Member member, long amount) {
 		SurveyPointHistory history = SurveyPointHistory.builder()

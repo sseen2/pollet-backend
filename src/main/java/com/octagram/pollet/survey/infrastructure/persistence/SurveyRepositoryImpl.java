@@ -169,13 +169,13 @@ public class SurveyRepositoryImpl implements SurveyRepositoryCustom {
 	}
 
 	@Override
-	public Optional<Survey> findByIdForUpdate(Long id) {
+	public Optional<Survey> findByIdByOptimistic(Long id) {
 		QSurvey survey = QSurvey.survey;
 
 		return Optional.ofNullable(
 			queryFactory.selectFrom(survey)
 				.where(survey.id.eq(id))
-				.setLockMode(LockModeType.PESSIMISTIC_WRITE)
+				.setLockMode(LockModeType.OPTIMISTIC)
 				.fetchOne()
 		);
 	}

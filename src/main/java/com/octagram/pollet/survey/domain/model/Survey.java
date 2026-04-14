@@ -5,6 +5,7 @@ import com.octagram.pollet.global.domain.model.BaseEntity;
 import com.octagram.pollet.member.domain.model.Member;
 import com.octagram.pollet.survey.domain.model.type.*;
 
+import jakarta.persistence.Version;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -56,6 +57,9 @@ public class Survey extends BaseEntity {
 	@Builder.Default
 	@OneToMany(mappedBy = "survey", cascade = CascadeType.ALL, orphanRemoval = true)
 	private List<Question> questions = new ArrayList<>();
+
+    @Version
+    private Long version;
 
 	@Column(nullable = false)
 	private String title;
