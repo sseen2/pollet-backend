@@ -1,4 +1,4 @@
-FROM openjdk:17-jdk-slim AS base
+FROM eclipse-temurin:17-jdk-jammy AS base
 
 # Build Stage
 FROM base AS builder
