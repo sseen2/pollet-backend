@@ -3,7 +3,6 @@ package com.octagram.pollet.auth.application.service;
 import org.springframework.stereotype.Service;
 
 import com.octagram.pollet.auth.presentation.dto.response.AuthReissueResponse;
-import com.octagram.pollet.auth.presentation.dto.response.TestJwtGetResponse;
 import com.octagram.pollet.global.exception.BusinessException;
 import com.octagram.pollet.global.jwt.repository.TokenRedisRepository;
 import com.octagram.pollet.global.jwt.service.JwtService;
@@ -66,16 +65,5 @@ public class AuthService {
 		tokenRepository.delete(memberId, refreshToken);
 
 		jwtService.setExpiredRefreshToken(response);
-	}
-
-	public TestJwtGetResponse getTestJwt(Long memberId) {
-		Member member = memberRepository.findById(memberId)
-			.orElseThrow(() -> new BusinessException(MemberErrorCode.MEMBER_NOT_FOUND));
-
-		String accessToken = jwtService.createAccessToken(member.getMemberId(), member.getEmail(), member.getRole().toString());
-		String refreshToken = jwtService.createRefreshToken(member.getMemberId());
-		tokenRepository.save(accessToken, refreshToken);
-
-		return new TestJwtGetResponse("Bearer " + accessToken, "RefreshToken=" + refreshToken);
 	}
 }
